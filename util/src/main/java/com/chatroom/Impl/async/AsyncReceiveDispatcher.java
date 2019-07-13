@@ -5,11 +5,13 @@ import com.chatroom.core.*;
 import com.chatroom.utils.CloseUtils;
 
 import java.io.IOException;
+import java.nio.channels.Channels;
+import java.nio.channels.WritableByteChannel;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class AsyncReceiveDispatcher implements ReceiveDispatcher {
+public class AsyncReceiveDispatcher implements ReceiveDispatcher, IoArgs.IoArgsEventProcess {
 
     private final AtomicBoolean isClosed = new AtomicBoolean(false);
 
@@ -19,35 +21,22 @@ public class AsyncReceiveDispatcher implements ReceiveDispatcher {
 
     private IoArgs ioArgs = new IoArgs();
 
-    private ReceivePacket packetTemp;
+    private ReceivePacket<?> packetTemp;
 
-    private byte[] buffer;
+    private WritableByteChannel packetChannel;
+    private long total;
 
-    private int total;
-
-    private int position;
+    private long position;
 
     public AsyncReceiveDispatcher(Receiver receiver, ReceivePacketCallback callback) throws IOException {
         this.receiver = receiver;
-        this.receiver.setReceiveListener(ioArgsEventListener);
+        this.receiver.setReceiveListener(this);
         this.callback = callback;
     }
 
     @Override
     public void start() {
         registerReceive();
-    }
-
-    private void registerReceive() {
-        try {
-            receiver.receiveAsync(ioArgs);
-        } catch (IOException e) {
-            closeAndNotifity();
-        }
-    }
-
-    private void closeAndNotifity() {
-        CloseUtils.close(this);
     }
 
     @Override
@@ -58,66 +47,93 @@ public class AsyncReceiveDispatcher implements ReceiveDispatcher {
     @Override
     public void close() throws IOException {
         if (isClosed.compareAndSet(false, true)) {
-            ReceivePacket packetTemp = this.packetTemp;
-            if (packetTemp != null) {
-                packetTemp = null;
-                CloseUtils.close(packetTemp);
-            }
+            completePacket(false);
         }
     }
 
-    private final IoArgs.IoArgsEventListener ioArgsEventListener = new IoArgs.IoArgsEventListener() {
-        @Override
-        public void onStarted(IoArgs args) {
-            int receiveSize;
-            if (packetTemp == null) {
-                receiveSize = 4;
-            } else {
-                receiveSize = Math.min(total - position, args.capacity());
-            }
-            // 设置本次接受数据大小
-            args.limit(receiveSize);
-        }
+    private void closeAndNotifity() {
+        CloseUtils.close(this);
+    }
 
-        @Override
-        public void onCompleted(IoArgs args) {
-            assemblePacket(args);
-            // 接续接受下一条数据
-            registerReceive();
+    private void registerReceive() {
+        try {
+            receiver.postReceiveAsync();
+        } catch (IOException e) {
+            closeAndNotifity();
         }
-    };
+    }
 
     /**
      * 解析数据到packet
+     *
      * @param args
      */
-    public void assemblePacket (IoArgs args) {
+    public void assemblePacket(IoArgs args) {
         if (packetTemp == null) {
             int length = args.readLength();
             packetTemp = new StringReceivePacket(length);
-            buffer = new byte[length];
+
+            packetChannel = Channels.newChannel(packetTemp.open());
             total = length;
             position = 0;
         }
 
-        int count = args.writeTo(buffer, 0);
-        if (count > 0) {
-            packetTemp.save(buffer, count);
+        try {
+            int count = args.writeTo(packetChannel);
             position += count;
             // 检查是否完成Packet接受
             if (position == total) {
-                completePacket();
+                completePacket(true);
                 packetTemp = null;
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+            completePacket(false);
         }
+
     }
 
     /**
      * 完成数据接受
      */
-    private void completePacket() {
+    private void completePacket(boolean isSucceed) {
         ReceivePacket packet = this.packetTemp;
         CloseUtils.close(packet);
-        callback.onReceivePacketComplated(packet);
+        packetTemp = null;
+
+        WritableByteChannel channel = this.packetChannel;
+        CloseUtils.close(channel);
+        packetChannel = null;
+
+        if (packet != null) {
+            callback.onReceivePacketComplated(packet);
+        }
+    }
+
+    @Override
+    public IoArgs provideIoArgs() {
+        IoArgs args = this.ioArgs;
+
+        int receiveSize;
+        if (packetTemp == null) {
+            receiveSize = 4;
+        } else {
+            receiveSize = (int) Math.min(total - position, args.capacity());
+        }
+        // 设置本次接受数据大小
+        args.limit(receiveSize);
+        return args;
+    }
+
+    @Override
+    public void onConsumeFailed(IoArgs args, Exception e) {
+        e.printStackTrace();
+    }
+
+    @Override
+    public void onConsumeCompleted(IoArgs args) {
+        assemblePacket(args);
+        // 接续接受下一条数据
+        registerReceive();
     }
 }

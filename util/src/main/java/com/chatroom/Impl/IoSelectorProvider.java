@@ -7,7 +7,6 @@ import com.chatroom.utils.CloseUtils;
 import java.io.IOException;
 import java.nio.channels.*;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,36 +43,6 @@ public class IoSelectorProvider implements IoProvider {
         startWrite();
     }
 
-    private void startWrite() {
-        Thread thread = new Thread("Client IoSelectorProvider WriteSelector") {
-            @Override
-            public void run() {
-                super.run();
-                while (!isClosed.get()) {
-                    try {
-                        if (writeSelector.select() == 0) {
-                            waitSelection(inRegOutput);
-                            continue;
-                        }
-                        Set<SelectionKey> keySet = writeSelector.selectedKeys();
-                        for (SelectionKey key : keySet) {
-                            if (key.isValid()) {
-                                handleSelection(key, SelectionKey.OP_WRITE, outputCallbackMap, outputHandlePool);
-                            }
-                        }
-                        keySet.clear();
-
-
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
-        };
-        thread.setPriority(Thread.MAX_PRIORITY);
-        thread.start();
-    }
-
     private void startRead() {
         Thread thread = new Thread("Client IoSelectorProvider ReadSelector") {
             @Override
@@ -104,6 +73,36 @@ public class IoSelectorProvider implements IoProvider {
         thread.start();
     }
 
+    private void startWrite() {
+        Thread thread = new Thread("Client IoSelectorProvider WriteSelector") {
+            @Override
+            public void run() {
+                super.run();
+                while (!isClosed.get()) {
+                    try {
+                        if (writeSelector.select() == 0) {
+                            waitSelection(inRegOutput);
+                            continue;
+                        }
+                        Set<SelectionKey> keySet = writeSelector.selectedKeys();
+                        for (SelectionKey key : keySet) {
+                            if (key.isValid()) {
+                                handleSelection(key, SelectionKey.OP_WRITE, outputCallbackMap, outputHandlePool);
+                            }
+                        }
+                        keySet.clear();
+
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        };
+        thread.setPriority(Thread.MAX_PRIORITY);
+        thread.start();
+    }
+
 
     @Override
     public boolean registerInput(SocketChannel channel, HandleInputCallback callback) {
@@ -112,7 +111,7 @@ public class IoSelectorProvider implements IoProvider {
 
     @Override
     public boolean registerOutput(SocketChannel channel, HandleOutputCallback callback) {
-        return  registerSelection(channel, readSelector, SelectionKey.OP_WRITE, inRegOutput, outputCallbackMap, callback) != null;
+        return  registerSelection(channel, writeSelector, SelectionKey.OP_WRITE, inRegOutput, outputCallbackMap, callback) != null;
     }
 
     @Override
@@ -137,8 +136,7 @@ public class IoSelectorProvider implements IoProvider {
             readSelector.wakeup();
             writeSelector.wakeup();
 
-            CloseUtils.close(readSelector);
-            CloseUtils.close(writeSelector);
+            CloseUtils.close(readSelector, writeSelector);
         }
     }
 
@@ -150,19 +148,6 @@ public class IoSelectorProvider implements IoProvider {
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
-            }
-        }
-    }
-
-    private static void unRegisterSelection(SocketChannel channel, Selector selector,
-                                                  HashMap<SelectionKey, Runnable> map) {
-        if (channel.isRegistered()) {
-            SelectionKey key = channel.keyFor(selector);
-            if (key != null) {
-                // cancel取消所有的方法，interestOps可以单独取消读和写
-                key.cancel();
-                map.remove(key);
-                selector.wakeup();
             }
         }
     }
@@ -204,6 +189,19 @@ public class IoSelectorProvider implements IoProvider {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            }
+        }
+    }
+
+    private static void unRegisterSelection(SocketChannel channel, Selector selector,
+                                            HashMap<SelectionKey, Runnable> map) {
+        if (channel.isRegistered()) {
+            SelectionKey key = channel.keyFor(selector);
+            if (key != null) {
+                // cancel取消所有的方法，interestOps可以单独取消读和写
+                key.cancel();
+                map.remove(key);
+                selector.wakeup();
             }
         }
     }

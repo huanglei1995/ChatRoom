@@ -11,26 +11,21 @@ import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.UUID;
 
-public class Connector implements Closeable,SocketChannelAdapter.OnChangeStatusChangedListener {
+public class  Connector implements Closeable,SocketChannelAdapter.OnChangeStatusChangedListener {
 
     // 设置当前连接的唯一性
     private UUID key = UUID.randomUUID();
-
     private SocketChannel channel;
-
     private Sender sender;
-
     private Receiver receiver;
-
     private SendDispatcher sendDispatcher;
-
     private ReceiveDispatcher receiveDispatcher;
 
     public void setup (SocketChannel socketChannel) throws IOException {
         this.channel = socketChannel;
 
-        IoContext ioContext = IoContext.get();
-        SocketChannelAdapter adapter = new SocketChannelAdapter(channel, ioContext.getIoProvider(), this);
+        IoContext context = IoContext.get();
+        SocketChannelAdapter adapter = new SocketChannelAdapter(channel, context.getIoProvider(), this);
 
         this.sender = adapter;
         this.receiver = adapter;
@@ -45,6 +40,18 @@ public class Connector implements Closeable,SocketChannelAdapter.OnChangeStatusC
         sendDispatcher.send(packet);
     }
 
+    public void send(SendPacket packet) {
+        sendDispatcher.send(packet);
+    }
+
+    @Override
+    public void close() throws IOException {
+        receiveDispatcher.close();
+        sendDispatcher.close();
+        sender.close();
+        receiver.close();
+        channel.close();
+    }
 
     private ReceiveDispatcher.ReceivePacketCallback receivePacketCallback = new ReceiveDispatcher.ReceivePacketCallback(){
         @Override
@@ -55,15 +62,6 @@ public class Connector implements Closeable,SocketChannelAdapter.OnChangeStatusC
             }
         }
     };
-
-    @Override
-    public void close() throws IOException {
-        receiveDispatcher.close();
-        sendDispatcher.close();
-        sender.close();
-        receiver.close();
-        channel.close();
-    }
 
     @Override
     public void onChannelClosed(SocketChannel channel) {

@@ -1,10 +1,14 @@
 package com.chatroom.box;
 
 import com.chatroom.core.SendPacket;
+import com.chatroom.utils.CloseUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 
-public class StringSendPacket extends SendPacket {
+public class StringSendPacket extends SendPacket<ByteArrayInputStream> {
 
     private final byte[] bytes;
 
@@ -14,11 +18,9 @@ public class StringSendPacket extends SendPacket {
     }
 
     @Override
-    public void close() throws IOException {
+    protected ByteArrayInputStream createStream() {
+        return new ByteArrayInputStream(bytes);
     }
 
-    @Override
-    public byte[] bytes() {
-        return bytes;
-    }
+
 }

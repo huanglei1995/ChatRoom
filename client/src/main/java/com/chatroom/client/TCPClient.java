@@ -45,8 +45,4 @@ public class TCPClient extends Connector {
         return null;
     }
 
-    private static void writer(Socket client) throws IOException {
-
-    }
-
 }
