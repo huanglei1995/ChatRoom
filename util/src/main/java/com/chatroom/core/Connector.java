@@ -3,18 +3,21 @@ package com.chatroom.core;
 import com.chatroom.Impl.SocketChannelAdapter;
 import com.chatroom.Impl.async.AsyncReceiveDispatcher;
 import com.chatroom.Impl.async.AsyncSendDispatcher;
+import com.chatroom.box.BytesReceivePacket;
+import com.chatroom.box.FileReceivePacket;
 import com.chatroom.box.StringReceivePacket;
 import com.chatroom.box.StringSendPacket;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
 import java.util.UUID;
 
-public class  Connector implements Closeable,SocketChannelAdapter.OnChangeStatusChangedListener {
+public abstract class  Connector implements Closeable,SocketChannelAdapter.OnChangeStatusChangedListener {
 
     // 设置当前连接的唯一性
-    private UUID key = UUID.randomUUID();
+    protected UUID key = UUID.randomUUID();
     private SocketChannel channel;
     private Sender sender;
     private Receiver receiver;
@@ -53,13 +56,29 @@ public class  Connector implements Closeable,SocketChannelAdapter.OnChangeStatus
         channel.close();
     }
 
+    protected abstract File createNewReceiveFile();
+
     private ReceiveDispatcher.ReceivePacketCallback receivePacketCallback = new ReceiveDispatcher.ReceivePacketCallback(){
+
+        @Override
+        public ReceivePacket<?, ?> onArrivedNewPacket(byte type, long length) {
+            switch (type) {
+                case Packet.TYPE_MEMORY_BYTES:
+                    return new BytesReceivePacket(length);
+                case Packet.TYPE_MEMORY_STRING:
+                    return new StringReceivePacket(length);
+                case Packet.TYPE_STREAM_FILE:
+                    return new FileReceivePacket(length, createNewReceiveFile());
+                case Packet.TYPE_STREAM_DIRECT:
+                    return new BytesReceivePacket(length);
+                default:
+                    throw new UnsupportedOperationException("Unsupported packet type:" + type);
+            }
+        }
+
         @Override
         public void onReceivePacketComplated(ReceivePacket packet) {
-            if (packet instanceof StringReceivePacket) {
-                String msg = ((StringReceivePacket) packet).string();
-                onReceivedNewMessage(msg);
-            }
+            onReceivedPacket(packet);
         }
     };
 
@@ -67,6 +86,10 @@ public class  Connector implements Closeable,SocketChannelAdapter.OnChangeStatus
     public void onChannelClosed(SocketChannel channel) {
 
     }
+    protected void onReceivedPacket (ReceivePacket packet) {
+        System.out.println(key.toString() + ":[New Packet]-Type:" + packet.type() + ", Length:" + packet.length);
+    }
+
 
     protected void onReceivedNewMessage (String msg) {
         System.out.println(key + ":" + msg);

@@ -21,7 +21,7 @@ public class AsyncReceiveDispatcher implements ReceiveDispatcher, IoArgs.IoArgsE
 
     private IoArgs ioArgs = new IoArgs();
 
-    private ReceivePacket<?> packetTemp;
+    private ReceivePacket<?, ?> packetTemp;
 
     private WritableByteChannel packetChannel;
     private long total;

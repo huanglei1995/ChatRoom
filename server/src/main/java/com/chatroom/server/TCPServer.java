@@ -4,6 +4,7 @@ import com.chatroom.server.handle.ClientHandle;
 import com.chatroom.server.handle.ClientHandleCallback;
 import com.chatroom.utils.CloseUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
@@ -19,6 +20,8 @@ public class TCPServer implements ClientHandleCallback{
 
     private final int port;
 
+    private final File cachePath;
+
     private ClientListener listener;
 
     private List<ClientHandle> clientHandleList = new ArrayList<>();
@@ -29,8 +32,9 @@ public class TCPServer implements ClientHandleCallback{
 
     private ServerSocketChannel server;
 
-    public TCPServer(int port) {
+    public TCPServer(int port, File cachePath) {
         this.port = port;
+        this.cachePath = cachePath;
         // 转发线程池
         this.forwardingThreadPoolExecutor = Executors.newSingleThreadExecutor();
     }
@@ -119,7 +123,7 @@ public class TCPServer implements ClientHandleCallback{
 
                             try {
                                 // 客户端构建异步线程
-                                ClientHandle clientHandle = new ClientHandle(socketChannel, TCPServer.this);
+                                ClientHandle clientHandle = new ClientHandle(socketChannel, TCPServer.this, cachePath);
 
                                 synchronized (TCPServer.this) {
                                     clientHandleList.add(clientHandle);

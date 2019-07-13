@@ -4,32 +4,34 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 
-public abstract class Packet<T extends Closeable> implements Closeable {
+public abstract class Packet<Stream extends Closeable> implements Closeable {
 
-    private T stream;
+    // BYTES类型
+    public static final byte TYPE_MEMORY_BYTES = 1;
+    public static final byte TYPE_MEMORY_STRING = 2;
+    public static final byte TYPE_STREAM_FILE = 3;
+    public static final byte TYPE_STREAM_DIRECT = 4;
 
-    protected byte type;
+    private Stream stream;
 
-    protected long lenth;
-
-    public byte type() {
-        return type;
-    }
+    protected long length;
 
     public long lenth () {
-        return lenth;
+        return length;
     }
 
-    public final T open(){
+    public final Stream open(){
         if (stream == null) {
             stream = createStream();
         }
         return stream;
     }
 
-    protected abstract T createStream ();
+    public abstract byte type();
 
-    protected  void closeStream (T steam) throws IOException {
+    protected abstract Stream createStream ();
+
+    protected  void closeStream (Stream steam) throws IOException {
         stream.close();
     }
     @Override
