@@ -23,7 +23,7 @@
     </modules>
     <properties>
         <java.version>1.8</java.version>
-        <spirng-boot.version>2.1.6.RELEASE</spirng-boot.version>
+        <spirng-boot.version>2.5.12</spirng-boot.version>
     </properties>
 
     <dependencyManagement>
